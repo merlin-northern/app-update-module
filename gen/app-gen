@@ -55,7 +55,8 @@ if ! check_dependency mender-artifact; then
   exit 1
 fi
 
-xdelta3_cmd="xdelta3 -W16777216 -B16777216 -e -s"
+# -W16777216 -B16777216
+delta_cmd="xdelta3 -e -s"
 device_types=""
 artifact_name=""
 output_path="app-artifact.mender"
@@ -248,7 +249,7 @@ prepare_images() {
     else
      export_image "$url_new" "${output_dir}/image-new.img"
      export_image "$url_current" "${output_dir}/image-current.img"
-     $xdelta3_cmd "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
+     $delta_cmd "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
      rm -f "${output_dir}/image-new.img" "${output_dir}/image-current.img"
     fi
   done

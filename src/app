@@ -16,7 +16,8 @@ if test -f "$config_file"; then
   . "$config_file"
 fi
 
-xdelta3_cmd="xdelta3 -W16777216 -B16777216 -d -s"
+# -W16777216 -B16777216
+delta_cmd="xdelta3 -d -s"
 tar_decompress_cmd="tar -xzvf"
 
 function get_image() {
@@ -36,7 +37,7 @@ function parse_metadata() {
     echo "ERROR: ${app_sub_module} not found. exiting."
     return 1
   fi
-  artifact_name=`cat "$2" | jq .artifact_provides.artifact_name`
+  artifact_name=`cat "$2" | jq -r .artifact_provides.artifact_name`
 }
 
 function decompress_artifact() {
@@ -66,7 +67,7 @@ function decompress_artifact() {
       current_image="${temp_dir}/current.${sha_current}.img"
       new_image="${temp_dir}/new.${sha_new}.img"
       $app_sub_module export "$url_current" "$current_image"
-      $xdelta3_cmd "$current_image" "${image_dir}/image.img" "${new_image}"
+      $delta_cmd "$current_image" "${image_dir}/image.img" "${new_image}"
       mv -v "${new_image}" "${image_dir}/image.img"
     fi
   done
