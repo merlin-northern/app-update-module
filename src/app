@@ -2,14 +2,21 @@
 
 set -e
 
+config_file="/etc/mender/mender-app.conf"
 version=""
 orchestrator=""
 platform=""
 manifests_dir=""
 app_module_dir="/usr/share/mender/app-modules/v1"
 app_sub_module=""
+artifact_name=""
+persistent_store="/data/mender-app"
 
-xdelta3_cmd="xdelta3 -d -s"
+if test -f "$config_file"; then
+  . "$config_file"
+fi
+
+xdelta3_cmd="xdelta3 -W16777216 -B16777216 -d -s"
 tar_decompress_cmd="tar -xzvf"
 
 function get_image() {
@@ -29,6 +36,7 @@ function parse_metadata() {
     echo "ERROR: ${app_sub_module} not found. exiting."
     return 1
   fi
+  artifact_name=`cat "$2" | jq .artifact_provides.artifact_name`
 }
 
 function decompress_artifact() {
@@ -67,7 +75,9 @@ function decompress_artifact() {
     sha_new=`cat "${image_dir}/sums-new.txt"`
     $app_sub_module import "${url_new}" "${image_dir}/image.img"
   done
-  $app_sub_module rollout "$temp_dir/manifests"
+  mkdir -p "${persistent_store}/${artifact_name}"
+  mv -v "$temp_dir/manifests" "${persistent_store}/${artifact_name}/"
+  $app_sub_module rollout "${persistent_store}/${artifact_name}/manifests"
 }
 
 STATE="$1"
@@ -85,7 +95,7 @@ case "$STATE" in
         ;;
 
     ArtifactInstall)
-        parse_metadata "$FILES"/header/meta-data;
+        parse_metadata "$FILES"/header/meta-data "$FILES"/header/header-info;
         decompress_artifact "$FILES"/files
         ;;
 

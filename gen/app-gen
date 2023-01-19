@@ -55,7 +55,7 @@ if ! check_dependency mender-artifact; then
   exit 1
 fi
 
-xdelta3_cmd="xdelta3 -e -s"
+xdelta3_cmd="xdelta3 -W16777216 -B16777216 -e -s"
 device_types=""
 artifact_name=""
 output_path="app-artifact.mender"
