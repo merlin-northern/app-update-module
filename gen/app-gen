@@ -350,12 +350,16 @@ deep_delta() {
     echo "level $i $id $sum $sum_current"
     if [[ "${sum}" == "${sum_current}" ]]; then
       echo "      layers match sum:$sum"
-      echo "${sum}" > "${sum2path_new[$sum]}"
+      echo "${sum}" > "${sum2path_new[$sum]}".sha256sum
+      rm -f "${sum2path_new[$sum]}"
     else
       echo "      modified layer"
       echo $delta_cmd "${sum2path_current[$sum_current]}" "${sum2path_new[$sum]}" "$tmp_file"
       $delta_cmd "${sum2path_current[$sum_current]}" "${sum2path_new[$sum]}" "$tmp_file"
-      mv "$tmp_file" "${sum2path_new[$sum]}"
+      mv "$tmp_file" "${sum2path_new[$sum]}".vcdiff
+      echo "${sum_current}" > "${sum2path_new[$sum]}".current.sha256sum
+      echo "${sum}" > "${sum2path_new[$sum]}".new.sha256sum
+      rm -f "${sum2path_new[$sum]}"
     fi
   done
   rm -f "$output"
@@ -399,6 +403,7 @@ prepare_images() {
             fi
             if [[ ${deep_delta} == true ]]; then
               deep_delta "${root_dir}" "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
+              touch "${output_dir}"/deep_delta
             else
               $delta_cmd "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
             fi
