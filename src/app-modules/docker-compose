@@ -43,7 +43,7 @@ find_layer_by_sum() {
   fi
   file_list=`mktemp`
   find "$dir" -name layer.tar -exec sha256sum {} \; > "${file_list}"
-  cat "$file_list" | sed -ne "/${sum}/s/^${sum}[ ]*//p"
+  cat "$file_list" | sed -ne "/^${sum}/s/^${sum}[ ]*//p"
   rm -f "${file_list}"
 }
 
@@ -69,17 +69,12 @@ apply_layer_delta() {
   # we need to find the corresponding layer in current_image_dir and encode the
   # delta in new_image_dir, in the directory we must also find by layer.tar sum
   current_layer=`find_layer_by_sum "${current_sum}" "${current_image_dir}"`
-  new_layer=`find_layer_by_sum "${new_sum}" "${new_image_dir}"`
   if test "$current_layer" = ""; then
     echo "ERROR: cant find current layer by checksum: ${current_sum}"
     set +x; while [[ ! -f /tmp/bp0 ]]; do sleep 0.1; done; set -x;
     return 1
   fi
-  if test "$new_layer" = ""; then
-    echo "ERROR: cant find new layer by checksum: ${new_sum}"
-    return 1
-  fi
-  $delta_cmd "$current_layer" "${new_layer}" "${output_layer}"
+  $delta_cmd "$current_layer" "${vcdiff}" "${output_layer}"
   # TODO: we could here verify the sums
   rm -f "${current_sum_file}" "${new_sum_file}" "${vcdiff}"
 }
