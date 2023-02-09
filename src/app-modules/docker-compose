@@ -17,6 +17,7 @@ set -x
 
 docker_compose_cmd=docker-compose
 docker_cmd=docker
+delta_cmd="xdelta3 -d -s"
 
 unpack_image() {
   local input_file="$1"
@@ -25,7 +26,8 @@ unpack_image() {
   if test -d "${image_dir}"; then
     rm -Rf "${image_dir}"
   fi
-  tar cvf "$input_file" -C "${image_dir}"
+  mkdir -p "${image_dir}"
+  tar xvf "$input_file" -C "${image_dir}"
 }
 
 # given a checksum and a directory find matching layer.tar
@@ -41,11 +43,9 @@ find_layer_by_sum() {
   fi
   file_list=`mktemp`
   find "$dir" -name layer.tar -exec sha256sum {} \; > "${file_list}"
-  cat "$file_list" | grep ^"${sum}" | cut -f2 -d' '
+  cat "$file_list" | sed -ne "/${sum}/s/^${sum}[ ]*//p"
   rm -f "${file_list}"
 }
-
-delta_cmd="xdelta3 -d -s"
 
 # given current and new image directories and the binary delta of a layer
 # apply and save the layer.tar in the new image dir
@@ -72,6 +72,7 @@ apply_layer_delta() {
   new_layer=`find_layer_by_sum "${new_sum}" "${new_image_dir}"`
   if test "$current_layer" = ""; then
     echo "ERROR: cant find current layer by checksum: ${current_sum}"
+    set +x; while [[ ! -f /tmp/bp0 ]]; do sleep 0.1; done; set -x;
     return 1
   fi
   if test "$new_layer" = ""; then
@@ -97,8 +98,17 @@ resolve_deep_delta() {
   local current_image_dir="${MODULE_TMPDIR:-${TMPDIR}}"
   local current_image_file
   local vcdiff
+  local image_dir="${MODULE_TMPDIR:-${TMPDIR}}"
 
   if test ! -d "$new_image_dir"; then
+    echo "ERROR: neither MODULE_TMPDIR or TMPDIR is set"
+    return 1
+  fi
+  if test ! -d "$current_image_dir"; then
+    echo "ERROR: neither MODULE_TMPDIR or TMPDIR is set"
+    return 1
+  fi
+  if test ! -d "$image_dir"; then
     echo "ERROR: neither MODULE_TMPDIR or TMPDIR is set"
     return 1
   fi
@@ -128,6 +138,14 @@ app_load() {
     local url_current="$4"
 
     if test "$OPTIONS" = "deep_delta"; then
+      if test "$MODULE_TMPDIR" = ""; then
+        echo "ERROR: ${MODULE_TMPDIR} cant be empty"
+        return 1
+      fi
+      if ! test -d "$MODULE_TMPDIR"; then
+        echo "ERROR: ${MODULE_TMPDIR} does not exist as a directory"
+        return 1
+      fi
       resolve_deep_delta "${application_name}" "${input_file}" "${url_current}"
     fi
     $docker_cmd image load < "$input_file"
