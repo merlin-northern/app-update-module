@@ -28,6 +28,47 @@ unpack_image() {
   tar cvf "$input_file" -C "${image_dir}"
 }
 
+# given a checksum and a directory find matching layer.tar
+find_layer_by_sum() {
+  local sum="$1"
+  local dir="$2"
+  local file_list=`mktemp`
+
+  find "$dir" -name layer.tar -exec sha256sum {} \; > "${file_list}"
+  cat "$file_list" | grep ^"${sum}" | cut -f2 -d' '
+  rm -f "${file_list}"
+}
+
+delta_cmd="xdelta3 -d -s"
+
+# given current and new image directories and the binary delta of a layer
+# apply and save the layer.tar in the new image dir
+apply_layer_delta() {
+  local current_image_dir="$1"
+  local new_image_dir="$2"
+  local vcdiff="$3"
+  local current_sum_file
+  local new_sum_file
+  local current_sum
+  local new_sum
+  local output_layer
+  local current_layer_tar
+  local new_layer_tar
+
+  current_sum_file=`echo "$vcdiff" | sed -e 's/.vcdiff$/.current.sha256sum/'`
+  new_sum_file=`echo "$vcdiff" | sed -e 's/.vcdiff$/.new.sha256sum/'`
+  output_layer=`echo "$vcdiff" | sed -e 's/.vcdiff$//'`
+  current_sum=`cat "${current_sum_file}"`
+  new_sum=`cat "${new_sum_file}"`
+  # we need to find the corresponding layer in current_image_dir and encode the
+  # delta in new_image_dir, in the directory we must also find by layer.tar sum
+  current_layer=`find_layer_by_sum "${current_sum}" "${current_image_dir}"`
+  new_layer=`find_layer_by_sum "${new_sum}" "${new_image_dir}"`
+  $delta_cmd "$current_layer" "${new_layer}" "${output_layer}"
+  # TODO: we could here verify the sums
+  rm -f "${current_sum_file}" "${new_sum_file}" "${vcdiff}"
+}
+
 # |-- ecaa1158057a2e325f72c5e43c9847fbef370da5a65d6534b1708c99feb7c0e7
   #|   |-- VERSION
   #|   |-- json
@@ -41,6 +82,7 @@ resolve_deep_delta() {
   local new_image_dir="${MODULE_TMPDIR:-${TMPDIR}}"
   local current_image_dir="${MODULE_TMPDIR:-${TMPDIR}}"
   local current_image_file
+  local vcdiff
 
   if test ! -d "$new_image_dir"; then
     echo "ERROR: neither MODULE_TMPDIR or TMPDIR is set"
@@ -55,7 +97,12 @@ resolve_deep_delta() {
   current_image_dir="${image_dir}/image-`sha256sum "${current_image_file}" | cut -f1 -d' '`"
   unpack_image "${input_file}" "${new_image_dir}"
   unpack_image "${current_image_file}" "${current_image_dir}"
-
+  for vcdiff in "${new_image_dir}"/*/layer.tar.vcdiff; do # TODO: change into something else;
+    if test ! -f "$vcdiff"; then
+      break
+    fi
+    apply_layer_delta "${current_image_dir}" "${new_image_dir}" "${vcdiff}"
+  done
 }
 
 app_load() {

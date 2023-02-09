@@ -145,10 +145,12 @@ handle_artifact() {
                 return 1
             fi
             if test ! -f "${image_dir}/deep_delta"; then
+              # deep-delta means that the binary delta was generated at the layers level,
+              # and the orchestrators submodule will deal with decoding during the LOAD below
+              # ref. to LOAD implementations
               image_current="${temp_dir}/current.${sha_current}.img"
               image_new="${temp_dir}/new.${sha_new}.img"
               $app_sub_module SAVE "${application_name}" "$url_current" "$image_current"
-              # TODO: read the metadata per image, if deep-delta we do nothing here
               $delta_cmd "$image_current" "${image_dir}/image.img" "${image_new}"
               mv -v "${image_new}" "${image_dir}/image.img"
             fi
