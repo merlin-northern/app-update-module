@@ -29,11 +29,17 @@ unpack_image() {
 }
 
 # given a checksum and a directory find matching layer.tar
+# be careful what you echo to stdout from this function:
+# it prints the path to a layer
 find_layer_by_sum() {
   local sum="$1"
   local dir="$2"
-  local file_list=`mktemp`
+  local file_list
 
+  if test "$sum" = ""; then
+    return 1
+  fi
+  file_list=`mktemp`
   find "$dir" -name layer.tar -exec sha256sum {} \; > "${file_list}"
   cat "$file_list" | grep ^"${sum}" | cut -f2 -d' '
   rm -f "${file_list}"
@@ -64,6 +70,14 @@ apply_layer_delta() {
   # delta in new_image_dir, in the directory we must also find by layer.tar sum
   current_layer=`find_layer_by_sum "${current_sum}" "${current_image_dir}"`
   new_layer=`find_layer_by_sum "${new_sum}" "${new_image_dir}"`
+  if test "$current_layer" = ""; then
+    echo "ERROR: cant find current layer by checksum: ${current_sum}"
+    return 1
+  fi
+  if test "$new_layer" = ""; then
+    echo "ERROR: cant find new layer by checksum: ${new_sum}"
+    return 1
+  fi
   $delta_cmd "$current_layer" "${new_layer}" "${output_layer}"
   # TODO: we could here verify the sums
   rm -f "${current_sum_file}" "${new_sum_file}" "${vcdiff}"
@@ -103,6 +117,8 @@ resolve_deep_delta() {
     fi
     apply_layer_delta "${current_image_dir}" "${new_image_dir}" "${vcdiff}"
   done
+  rm -f "${input_file}"
+  tar cf "${input_file}" -C "${new_image_dir}" .
 }
 
 app_load() {
