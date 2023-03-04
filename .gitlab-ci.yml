@@ -62,3 +62,4 @@ test:acceptancetests:
     - docker run -d --entrypoint sleep debian:latest 65536
     - docker ps
     - ls -alR
+    - ./acceptance-tests/run.sh
