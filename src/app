@@ -133,6 +133,48 @@ clean_up() {
     fi
 }
 
+repack_image() {
+  local input_file="$1"
+  local temporary_directory="$2"
+  local output_directory
+  local output_file
+
+  if test ! -f "$input_file"; then
+    return 1
+  fi
+  if test ! -d "$temporary_directory"; then
+    return 2
+  fi
+  output_directory="${temporary_directory}/$(basename "$input_file")"-repack
+  mkdir "${output_directory}"
+  if test $? -ne 0; then
+    return 3
+  fi
+
+  tar -C "$output_directory" -xvf "$input_file"
+  if test $? -ne 0; then
+    rm -Rf "${output_directory}"
+    return 3
+  fi
+
+  output_file="${temporary_directory}/$(basename "$input_file")".tar
+  GZIP=-n tar --sort=name --mtime='UTC 2020-05-05' --owner=0 --group=0 \
+   --numeric-owner --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime \
+   -C "${output_directory}" -cf "${output_file}" .
+  if test $? -ne 0; then
+    rm -Rf "${output_directory}"
+    return 5
+  fi
+
+  mv -v "${output_file}" "${input_file}"
+  if test $? -ne 0; then
+    rm -Rf "${output_directory}"
+    return 6
+  fi
+  sha256sum "${input_file}"
+  rm -Rf "${output_directory}"
+}
+
 handle_artifact() {
     local image_dir
     local image
@@ -188,7 +230,10 @@ handle_artifact() {
                 image_current="${temp_dir}/current.${sha_current}.img"
                 image_new="${temp_dir}/new.${sha_new}.img"
                 $app_sub_module SAVE "${application_name}" "$url_current" "$image_current"
+                echo "repack: $image_current ${temp_dir}"
+                repack_image "$image_current" "${temp_dir}"
                 $delta_cmd "$image_current" "${image_dir}/image.img" "${image_new}"
+                echo "repack: delta: $(sha256sum "$image_current") $(sha256sum "${image_dir}/image.img")"
                 mv -v "${image_new}" "${image_dir}/image.img"
             fi
         fi

@@ -482,6 +482,28 @@ deep_delta() {
     rm -Rf "$current_dir" "$new_dir"
 }
 
+repack_image() {
+  local -r input_file="$1"
+  local -r temporary_directory="$2"
+  local output_directory
+  local output_file
+
+  [[ -f "$input_file" ]] || return 1
+  [[ -d "$temporary_directory" ]] || return 2
+  output_directory="${temporary_directory}/$(basename "$input_file")"-repack
+  mkdir "${output_directory}" || return 3
+
+  tar -C "$output_directory" -xvf "$input_file" || return 4
+  output_file="${temporary_directory}/$(basename "$input_file")".tar
+  GZIP=-n tar --sort=name --mtime='UTC 2020-05-05' --owner=0 --group=0 \
+   --numeric-owner --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime \
+   -C "${output_directory}" -cvf "${output_file}" . || return 5
+  mv -v "${output_file}" "${input_file}" || return 6
+  rm -Rf "${output_directory}"
+  sha256sum "${input_file}"
+#  read -s -n1 -p"dbg> "
+}
+
 prepare_images() {
     local -r root_dir="$1"
     local i
@@ -519,7 +541,12 @@ prepare_images() {
                 deep_delta "${root_dir}" "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
                 touch "${output_dir}"/deep_delta
             else
+                echo "repack: ${output_dir}/image-current.img"
+                repack_image "${output_dir}/image-current.img" "$(dirname "${root_dir}")"
+                echo "repack: ${output_dir}/image-new.img"
+                repack_image "${output_dir}/image-new.img" "$(dirname "${root_dir}")"
                 $delta_cmd "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
+                echo "repack: delta_cmd `sha256sum "${output_dir}/image-current.img"` `sha256sum "${output_dir}/image-new.img"`"
             fi
             rm -f "${output_dir}/image-new.img" "${output_dir}/image-current.img"
         fi
