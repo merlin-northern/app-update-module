@@ -54,7 +54,7 @@ fi
 
 CONFIG_HAS_XDELTA3_CMD="xdelta3"
 CONFIG_HAS_TAR_CMD="tar"
-delta_cmd="${CONFIG_HAS_XDELTA3_CMD} -d -s"
+delta_cmd="${CONFIG_HAS_XDELTA3_CMD} -W 4194304 -d -s"
 tar_decompress_cmd="${CONFIG_HAS_TAR_CMD} -xzvf"
 
 assert_requirements() {
@@ -158,7 +158,7 @@ repack_image() {
   fi
 
   output_file="${temporary_directory}/$(basename "$input_file")".tar
-  GZIP=-n tar --sort=name --mtime='UTC 2020-05-05' --owner=0 --group=0 \
+  GZIP=-n TZ=UTC0 tar --utc --sort=name --mtime="@0" --owner=0 --group=0 \
    --numeric-owner --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime \
    -C "${output_directory}" -cf "${output_file}" .
   if test $? -ne 0; then
@@ -233,7 +233,7 @@ handle_artifact() {
                 echo "repack: $image_current ${temp_dir}"
                 repack_image "$image_current" "${temp_dir}"
                 $delta_cmd "$image_current" "${image_dir}/image.img" "${image_new}"
-                echo "repack: delta: $(sha256sum "$image_current") $(sha256sum "${image_dir}/image.img")"
+                echo "repack: applying delta: delta_cmd $(sha256sum "$image_current") $(sha256sum "${image_dir}/image.img")"
                 mv -v "${image_new}" "${image_dir}/image.img"
             fi
         fi

@@ -64,7 +64,7 @@ if ! check_dependency mender-artifact; then
     exit 1
 fi
 
-delta_cmd="xdelta3 -e -s"
+delta_cmd="xdelta3 -W 4194304 -e -s"
 declare -a device_types
 artifact_name=""
 output_path="app-artifact.mender"
@@ -77,6 +77,7 @@ platform=""
 manifests_dir=""
 declare -a images=()
 declare -a images_shas=()
+declare -A files_sha
 deep_delta=false
 
 set +u
@@ -495,7 +496,7 @@ repack_image() {
 
   tar -C "$output_directory" -xvf "$input_file" || return 4
   output_file="${temporary_directory}/$(basename "$input_file")".tar
-  GZIP=-n tar --sort=name --mtime='UTC 2020-05-05' --owner=0 --group=0 \
+  GZIP=-n TZ=UTC0 tar --utc --sort=name --mtime="@0" --owner=0 --group=0 \
    --numeric-owner --pax-option=exthdr.name=%d/PaxHeaders/%f,delete=atime,delete=ctime \
    -C "${output_directory}" -cvf "${output_file}" . || return 5
   mv -v "${output_file}" "${input_file}" || return 6
@@ -546,7 +547,9 @@ prepare_images() {
                 echo "repack: ${output_dir}/image-new.img"
                 repack_image "${output_dir}/image-new.img" "$(dirname "${root_dir}")"
                 $delta_cmd "${output_dir}/image-current.img" "${output_dir}/image-new.img" "${output_dir}/image.img"
-                echo "repack: delta_cmd `sha256sum "${output_dir}/image-current.img"` `sha256sum "${output_dir}/image-new.img"`"
+                files_sha["${output_dir}/image-current.img"]=$(sha256sum "${output_dir}/image-current.img" | cut -f1 -d' ')
+                files_sha["${output_dir}/image-new.img"]=$(sha256sum "${output_dir}/image-new.img" | cut -f1 -d' ')
+                echo "repack: calculating delta: delta_cmd `sha256sum "${output_dir}/image-current.img"` `sha256sum "${output_dir}/image-new.img"`"
             fi
             rm -f "${output_dir}/image-new.img" "${output_dir}/image-current.img"
         fi
@@ -557,6 +560,7 @@ generate_metadata() {
     local -r output="$1"
     local sha
     local -a shas
+    local f
 
     echo -ne "{" > "${output}"
     echo -ne '"application_name":' >> "${output}"
@@ -567,6 +571,12 @@ generate_metadata() {
     printf '"%s",' "$platform" >> "${output}"
     echo -ne '"version":' >> "${output}"
     printf '"%s",' "$version" >> "${output}"
+    if [[ "${#files_sha[@]}" != "0" ]]; then
+     for f in $(echo "${!files_sha[@]}" | tr ' ' '\n' | sort | uniq); do
+      echo -ne "\"${f}\":" >> "${output}"
+      printf '"%s",' "${files_sha[${f}]}" >> "${output}"
+     done
+    fi
     echo -ne '"images":[' >> "${output}"
     for sha in $(echo "${images_shas[@]}" | tr ' ' '\n' | sort | uniq); do
         shas+=($sha)
